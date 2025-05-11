@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fleet Stopwatch Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-5xl bg-white shadow-lg rounded-lg p-6 space-y-6">
+    <!-- Informasi Operator -->
+    <div class="text-sm text-gray-600 space-y-1 text-center border-b pb-4">
+      <p><strong>Unit ID:</strong> <span id="unitID">-</span></p>
+      <p><strong>Class Exca:</strong> <span id="classExca">-</span></p>
+      <p><strong>Estimasi Jarak :</strong> <span id="estimasiJarak">-</span></p>
+    </div>
+
+    <!-- Stopwatch Display -->
+    <div class="text-center space-y-4">
+      <h2 class="text-xl font-semibold">Task Stopwatch</h2>
+      <div class="flex justify-center">
+        <span id="stopwatch" class="text-4xl font-mono text-gray-800">00:00</span>
+      </div>
+    </div>
+
+    <!-- Current Task -->
+    <div class="text-center">
+      <p class="text-gray-700">Current Task: <strong id="currentTaskLabel" class="text-black">Digging</strong></p>
+    </div>
+
+    <!-- Table Display -->
+    <div class="overflow-auto max-h-96 border rounded">
+      <table class="min-w-full text-sm text-center text-gray-700 border border-gray-300" id="pivotTable">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="border px-3 py-2 text-left">Task</th>
+          </tr>
+        </thead>
+        <tbody id="pivotBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Buttons -->
+    <div class="flex justify-center gap-4">
+      <button onclick="startStopwatch()" class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded transition">
+        Start
+      </button>
+      <button onclick="stopStopwatch()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded transition">
+        Stop
+      </button>
+    </div>
+
+    <div class="flex flex-wrap justify-center gap-4 pt-4 border-t border-gray-200">
+      <button id="actionBtn" onclick="saveTaskDuration()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded transition w-full sm:w-auto">
+        Save "Digging"
+      </button>
+      <button onclick="resetAll()" class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded transition w-full sm:w-auto">
+        Reset All
+      </button>
+      <button class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded transition w-full sm:w-auto">
+        <a href="index.html">Back to Input Data</a>
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Modal -->
+  <div id="summaryModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white w-full max-w-md p-6 rounded-lg shadow-lg">
+      <h2 class="text-2xl font-bold mb-4 text-center text-blue-600">Front Loading Summary</h2>
+      <div id="summaryContent" class="text-gray-800 text-sm space-y-2"></div>
+      <div class="text-center mt-4 space-x-2">
+        <button onclick="closeSummary()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">Close</button>
+        <!-- <button onclick="downloadSummaryPDF()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Download PDF</button> -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("unitID").textContent = localStorage.getItem("unitID") || "-";
+      document.getElementById("classExca").textContent = localStorage.getItem("classExca") || "-";
+      document.getElementById("estimasiJarak").textContent = localStorage.getItem("estimasiJarak") || "-";
+      initializeTable();
+      updateStopwatch();
+    });
+
+    const tasks = ["digging", "swingLoad", "dumping", "swingEmpty"];
+    let currentTaskIndex = 0;
+    let seconds = 0;
+    let lastSavedTime = 0;
+    let stopwatchInterval = null;
+    let passCount = 0;
+    let taskRows = {};
+
+    function taskLabel(key) {
+      return {
+        digging: "Digging",
+        swingLoad: "Swing Load",
+        dumping: "Dumping",
+        swingEmpty: "Swing Empty"
+      }[key] || "Unknown";
+    }
+
+    function updateStopwatch() {
+      const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
+      const secs = String(seconds % 60).padStart(2, '0');
+      document.getElementById("stopwatch").textContent = `${mins}:${secs}`;
+    }
+
+    function formatTime(totalSeconds) {
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = totalSeconds % 60;
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function saveTaskDuration() {
+      const currentTime = seconds;
+      const duration = currentTime - lastSavedTime;
+      if (duration <= 0) {
+        alert("Durasi belum berjalan. Tekan Start dan tunggu beberapa detik sebelum menyimpan.");
+        return;
+      }
+
+      lastSavedTime = currentTime;
+      const durationText = formatTime(duration);
+      const currentTask = tasks[currentTaskIndex];
+
+      if (currentTaskIndex === 0) {
+        passCount++;
+        const headerRow = document.querySelector("#pivotTable thead tr");
+        const th = document.createElement("th");
+        th.className = "border px-3 py-2";
+        th.textContent = `Pass ${passCount}`;
+        headerRow.appendChild(th);
+      }
+
+      const td = document.createElement("td");
+      td.className = "border px-3 py-2";
+      td.textContent = durationText;
+      taskRows[currentTask].appendChild(td);
+
+      currentTaskIndex = (currentTaskIndex + 1) % tasks.length;
+      const nextTaskLabel = taskLabel(tasks[currentTaskIndex]);
+      document.getElementById("currentTaskLabel").textContent = nextTaskLabel;
+      document.getElementById("actionBtn").textContent = `Save "${nextTaskLabel}"`;
+    }
+
+    function resetAll() {
+      stopStopwatch();
+      seconds = 0;
+      lastSavedTime = 0;
+      currentTaskIndex = 0;
+      passCount = 0;
+      taskRows = {};
+      document.getElementById("pivotBody").innerHTML = "";
+      const thead = document.querySelector("#pivotTable thead tr");
+      thead.innerHTML = `<th class="border px-3 py-2 text-left">Task</th>`;
+      initializeTable();
+      updateStopwatch();
+
+      const label = taskLabel(tasks[0]);
+      document.getElementById("currentTaskLabel").textContent = label;
+      document.getElementById("actionBtn").textContent = `Save "${label}"`;
+    }
+
+    function startStopwatch() {
+      if (!stopwatchInterval) {
+        stopwatchInterval = setInterval(() => {
+          seconds++;
+          updateStopwatch();
+        }, 1000);
+      }
+    }
+
+    function stopStopwatch() {
+      clearInterval(stopwatchInterval);
+      stopwatchInterval = null;
+      showSummaryModal();
+    }
+
+    function showSummaryModal() {
+      const validPasses = Math.min(...tasks.map(task => (taskRows[task]?.children.length || 1) - 1));
+      const summary = {};
+      const loadingTimesPerPass = Array.from({ length: validPasses }, () => 0);
+
+      for (const task of tasks) {
+        const row = taskRows[task];
+        const cells = Array.from(row?.children || []).slice(1, validPasses + 1);
+        let totalTaskSeconds = 0;
+
+        cells.forEach((cell, index) => {
+          const [min, sec] = cell.textContent.split(":").map(Number);
+          const cellSeconds = min * 60 + sec;
+          totalTaskSeconds += cellSeconds;
+          loadingTimesPerPass[index] += cellSeconds;
+        });
+
+        const avgSeconds = validPasses > 0 ? Math.round(totalTaskSeconds / validPasses) : 0;
+        summary[task] = formatTime(avgSeconds);
+      }
+
+      const summaryContent = document.getElementById("summaryContent");
+      summaryContent.innerHTML = Object.entries(summary).map(
+        ([task, avg]) => `<p><strong>Avg ${taskLabel(task)}:</strong> ${avg}</p>`
+      ).join("");
+
+      summaryContent.innerHTML += `
+        <hr class="my-2 border-gray-300">
+        <p class="font-semibold text-center text-blue-700">Loading Time per Pass</p>
+        ${loadingTimesPerPass.map((s, i) => `<p>Pass ${i + 1}: ${formatTime(s)}</p>`).join("")}
+      `;
+
+      const totalAvgSeconds = validPasses > 0 ? Math.round(loadingTimesPerPass.reduce((a, b) => a + b, 0) / validPasses) : 0;
+      const totalavg = totalAvgSeconds / 60;
+      const unitId = document.getElementById("unitID").textContent.trim();
+      const loaderClass = document.getElementById("classExca").textContent.trim();
+      const jarak = parseFloat(document.getElementById("estimasiJarak").textContent);
+      const hauler = parseInt(localStorage.getItem("jumlahHauler")) || 0;
+
+      const pdtyClass = { "2600": 800, "6020": 720, "6015": 580, "395": 465, "390": 465 };
+      const loaderPdty = pdtyClass[loaderClass] || 0;
+      const travelLoad = (jarak / 1000 / 18) * 60;
+      const travelEmpty = (jarak / 1000 / 21) * 60;
+      const cycleTime = (jarak / 21) / 10;
+      const pdtyHauler = (43.6 * 60) / (travelLoad + travelEmpty + totalavg + 2);
+      const ritase = pdtyHauler / 43.6;
+      const oht = loaderPdty / pdtyHauler;
+      const ohtNeed = Math.ceil(oht * 0.95);
+      const matchFactor = (ohtNeed * pdtyHauler) / loaderPdty;
+      const matchFactorActual = (hauler * pdtyHauler) / loaderPdty;
+
+      summaryContent.innerHTML += `
+        <hr class="my-2 border-gray-300">
+        <p><strong>UnitID:</strong> ${unitId} <strong>| Class</strong> ${loaderClass}</p>
+        <p><strong>Cycle Time Loader:</strong> ${totalavg.toFixed(2)} min</p>
+        <p><strong>Cycle Time Hauler:</strong> ${cycleTime.toFixed(2)} min</p>
+        <p><strong>Productivity Hauler:</strong> ${pdtyHauler.toFixed(2)} BCM/hr</p>
+        <p><strong>Ritase:</strong> ${ritase.toFixed(2)}</p>
+        <p><strong>Oht Need:</strong> ${ohtNeed.toFixed(2)} <strong>| Oht Act</strong> ${hauler.toFixed(2)}</p>
+        <p><strong>Match Factor:</strong> ${matchFactor.toFixed(2)} <strong>| Actual Match Factor</strong> ${matchFactorActual.toFixed(2)}</p>
+      `;
+
+      document.getElementById("summaryModal").classList.remove("hidden");
+    }
+
+    function closeSummary() {
+      document.getElementById("summaryModal").classList.add("hidden");
+    }
+
+    function downloadSummaryPDF() {
+      const element = document.getElementById("summaryContent");
+      if (!element) {
+        alert("Summary not available.");
+        return;
+      }
+
+      html2canvas(element, { scale: 2 }).then(canvas => {
+        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+
+        const imgProps = {
+          width: canvas.width,
+          height: canvas.height
+        };
+        const ratio = Math.min(pageWidth / imgProps.width, pageHeight / imgProps.height);
+        const imgWidth = imgProps.width * ratio;
+        const imgHeight = imgProps.height * ratio;
+
+        const x = (pageWidth - imgWidth) / 2;
+        const y = 10; // top padding
+
+        pdf.addImage(imgData, 'JPEG', x, y, imgWidth, imgHeight);
+        pdf.save(`Front_Loading_Summary_${new Date().toISOString().split('T')[0]}.pdf`);
+      }).catch(error => {
+        console.error("Error generating PDF:", error);
+        alert("Gagal generate PDF. Silakan coba lagi.");
+      });
+    }
+
+    function initializeTable() {
+      const tbody = document.getElementById("pivotBody");
+      tasks.forEach(task => {
+        const tr = document.createElement("tr");
+        tr.className = "border-t";
+        const labelTd = document.createElement("td");
+        labelTd.className = "px-3 py-2 font-medium text-left";
+        labelTd.textContent = taskLabel(task);
+        tr.appendChild(labelTd);
+        tbody.appendChild(tr);
+        taskRows[task] = tr;
+      });
+    }
+  </script>
+</body>
+</html>

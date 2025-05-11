@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Input Unit</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white shadow-lg rounded-lg p-8 w-full max-w-xl">
+    <h2 class="text-xl font-bold mb-6 text-center text-gray-800">Input Data Unit</h2>
+    <form id="unitForm" class="space-y-4">
+
+      <!-- ID Unit -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ID Unit</label>
+        <input type="text" id="unitID" class="w-full border rounded px-3 py-2" required />
+      </div>
+
+      <!-- Class Exca -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Class Exca</label>
+        <select id="classExca" class="w-full border rounded px-3 py-2" required>
+          <option value="" disabled selected>Pilih Class Exca</option>
+          <option value="2600">2600</option>
+          <option value="6020">6020</option>
+          <option value="6015">6015</option>
+          <option value="395">395/390</option>
+        </select>
+      </div>
+
+      <!-- Estimasi Jarak -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Estimasi Jarak (meter)</label>
+        <input type="text" id="estimasiJarak" class="w-full border rounded px-3 py-2" required />
+        <p class="text-xs text-gray-500 mt-1">Gunakan koma atau titik sebagai desimal, misalnya: 12,5 atau 12.5</p>
+      </div>
+
+      <!-- Jumlah Hauler -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Jumlah Hauler</label>
+        <input type="number" id="jumlahHauler" class="w-full border rounded px-3 py-2" required />
+      </div>
+
+      <!-- Submit Button -->
+      <div class="text-center pt-4">
+        <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">
+          Mulai Stopwatch
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('unitForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      // Ambil nilai dan ubah koma ke titik
+      const estimasiRaw = document.getElementById('estimasiJarak').value.trim().replace(',', '.');
+      const estimasiNumber = parseFloat(estimasiRaw);
+
+      // Validasi apakah angka valid
+      if (isNaN(estimasiNumber)) {
+        alert("Estimasi jarak harus berupa angka valid. Contoh: 12,5 atau 12.5");
+        return;
+      }
+
+      // Simpan ke localStorage
+      localStorage.setItem("unitID", document.getElementById('unitID').value);
+      localStorage.setItem("classExca", document.getElementById('classExca').value);
+      localStorage.setItem("estimasiJarak", estimasiNumber);
+      localStorage.setItem("jumlahHauler", document.getElementById('jumlahHauler').value);
+
+      // Redirect ke stopwatch.html
+      window.location.href = "stopwatch.html";
+    });
+  </script>
+</body>
+</html>
